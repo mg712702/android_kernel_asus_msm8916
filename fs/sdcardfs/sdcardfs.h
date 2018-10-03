@@ -30,7 +30,6 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/aio.h>
-#include <linux/kref.h>
 #include <linux/mm.h>
 #include <linux/mount.h>
 #include <linux/namei.h>
@@ -194,13 +193,13 @@ struct sdcardfs_mount_options {
 	userid_t fs_user_id;
 	bool multiuser;
 	bool gid_derivation;
-	bool default_normal;
 	unsigned int reserved_mb;
 };
 
 struct sdcardfs_vfsmount_options {
 	gid_t gid;
 	mode_t mask;
+	bool default_normal;
 };
 
 extern int parse_options_remount(struct super_block *sb, char *options, int silent,
@@ -388,13 +387,11 @@ static inline void set_top(struct sdcardfs_inode_info *info,
 }
 
 static inline int get_gid(struct vfsmount *mnt,
-		struct super_block *sb,
 		struct sdcardfs_inode_data *data)
 {
-	struct sdcardfs_vfsmount_options *vfsopts = mnt->data;
-	struct sdcardfs_sb_info *sbi = SDCARDFS_SB(sb);
+	struct sdcardfs_vfsmount_options *opts = mnt->data;
 
-	if (vfsopts->gid == AID_SDCARD_RW && !sbi->options.default_normal)
+	if (opts->gid == AID_SDCARD_RW && !opts->default_normal)
 		/* As an optimization, certain trusted system components only run
 		 * as owner but operate across all users. Since we're now handing
 		 * out the sdcard_rw GID only to trusted apps, we're okay relaxing
@@ -403,7 +400,7 @@ static inline int get_gid(struct vfsmount *mnt,
 		 */
 		return AID_SDCARD_RW;
 	else
-		return multiuser_get_uid(data->userid, vfsopts->gid);
+		return multiuser_get_uid(data->userid, opts->gid);
 }
 
 static inline int get_mode(struct vfsmount *mnt,
@@ -477,6 +474,7 @@ extern appid_t get_appid(const char *app_name);
 extern appid_t get_ext_gid(const char *app_name);
 extern appid_t is_excluded(const char *app_name, userid_t userid);
 extern int check_caller_access_to_name(struct inode *parent_node, const struct qstr *name);
+extern int open_flags_to_access_mode(int open_flags);
 extern int packagelist_init(void);
 extern void packagelist_exit(void);
 
@@ -634,7 +632,7 @@ static inline bool str_n_case_eq(const char *s1, const char *s2, size_t len)
 
 static inline bool qstr_case_eq(const struct qstr *q1, const struct qstr *q2)
 {
-	return q1->len == q2->len && str_n_case_eq(q1->name, q2->name, q2->len);
+	return q1->len == q2->len && str_case_eq(q1->name, q2->name);
 }
 
 #define QSTR_LITERAL(string) QSTR_INIT(string, sizeof(string)-1)
