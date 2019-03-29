@@ -24,7 +24,7 @@
 #include <soc/qcom/scm.h>
 #include "governor.h"
 
-bool power_suspended;
+static bool power_suspended;
 
 static DEFINE_SPINLOCK(tz_lock);
 
